@@ -76,14 +76,10 @@ class ToolExecutor:
                 return self._execute_fs_delete_lines(arguments)
             elif tool_name == "fs_replace_lines":
                 return self._execute_fs_replace_lines(arguments)
-            elif tool_name == "fs_copy_to":
-                return self._execute_fs_copy_to(arguments)
             elif tool_name == "fs_ls":
                 return self._execute_fs_ls(arguments)
             elif tool_name == "fs_grep":
                 return self._execute_fs_grep(arguments)
-            elif tool_name == "fs_file_search":
-                return self._execute_fs_file_search(arguments)
             else:
                 return f"<error>Unknown tool: {tool_name}</error>"
         except Exception as e:
@@ -205,21 +201,6 @@ class ToolExecutor:
         warning = f"WARNING: {path} has been modified. Read it before next time you edit it.\n"
         return f"<observation>\n{warning}{result}\n</observation>"
     
-    def _execute_fs_copy_to(self, arguments: Dict[str, Any]) -> str:
-        src_path = arguments.get("src_path", "")
-        src_start_line = arguments.get("src_start_line", 1)
-        src_end_line = arguments.get("src_end_line", 1)
-        dst_path = arguments.get("dst_path", "")
-        dst_at_line = arguments.get("dst_at_line")
-        mode = arguments.get("mode", "insert")
-        dst_end_line = arguments.get("dst_end_line")
-        result = self.fs.copy_to(
-            src_path, src_start_line, src_end_line,
-            dst_path, dst_at_line, mode, dst_end_line
-        )
-        warning = f"WARNING: {dst_path} has been modified. Read it before next time you edit it.\n"
-        return f"<observation>\n{warning}{result}\n</observation>"
-    
     def _execute_fs_ls(self, arguments: Dict[str, Any]) -> str:
         path = arguments.get("path")
         recursive = arguments.get("recursive", False)
@@ -230,15 +211,6 @@ class ToolExecutor:
         keyword = arguments.get("keyword", "")
         path = arguments.get("path", "")
         return f"<observation>\n{self.fs.grep(keyword, path)}\n</observation>"
-
-    def _execute_fs_file_search(self, arguments: Dict[str, Any]) -> str:
-        path = arguments.get("path", "")
-        query = arguments.get("query", "")
-        regex = arguments.get("regex", False)
-        context = arguments.get("context", 60)
-        max_results = arguments.get("max_results", 20)
-        page = arguments.get("page", 1)
-        return f"<observation>\n{self.fs.file_search(path, query, regex, context, max_results, page)}\n</observation>"
 
 
 # =============================================================================

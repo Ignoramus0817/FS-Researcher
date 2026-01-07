@@ -7,6 +7,7 @@ import time
 import logging
 import subprocess
 import requests
+import os
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
@@ -318,56 +319,6 @@ class FileTools:
             "new_total_lines": len(new_lines),
         }, root_name="replace_lines")
 
-    def copy_to(self, src_path: str, src_start_line: int, src_end_line: int,
-                dst_path: str, dst_at_line: Optional[int] = None,
-                mode: str = "insert", dst_end_line: Optional[int] = None) -> str:
-        """Copy lines from one file to another."""
-        src = _abs(self.root_dir, src_path)
-        dst = _abs(self.root_dir, dst_path)
-
-        src_lines = _read_lines(src)
-        if not src_lines:
-            raise ValueError("source file is empty or does not exist")
-
-        s = max(1, min(src_start_line, src_end_line))
-        e = min(len(src_lines), max(src_start_line, src_end_line))
-        block = src_lines[s-1:e]
-
-        dst_lines = _read_lines(dst)
-
-        if mode == "insert":
-            if dst_at_line is None:
-                idx = 0
-            else:
-                idx = max(0, min(len(dst_lines), dst_at_line - 1))
-            new_lines = dst_lines[:idx] + block + dst_lines[idx:]
-            _write_lines(dst, new_lines)
-            return _to_xml({
-                "mode": "insert",
-                "inserted_at_line": idx + 1,
-                "inserted_lines": len(block),
-                "new_total_lines": len(new_lines),
-            }, root_name="copy_to")
-
-        if mode == "replace_range":
-            if dst_at_line is None or dst_end_line is None:
-                raise ValueError("dst_at_line and dst_end_line are required for replace_range")
-            n2 = len(dst_lines)
-            s2 = max(1, min(dst_at_line, dst_end_line))
-            e2 = min(n2, max(dst_at_line, dst_end_line))
-
-            new_lines = dst_lines[:s2-1] + block + dst_lines[e2:]
-            _write_lines(dst, new_lines)
-            return _to_xml({
-                "mode": "replace_range",
-                "replaced_start_line": s2,
-                "replaced_end_line": e2,
-                "inserted_lines": len(block),
-                "new_total_lines": len(new_lines),
-            }, root_name="copy_to")
-
-        raise ValueError("invalid mode")
-
     def ls(self, path: Optional[str] = None, recursive: bool = False, 
            max_depth: int = 2, glob_pattern: Optional[str] = None,
            limit: Optional[int] = None) -> str:
@@ -481,72 +432,6 @@ class FileTools:
             },
             root_name="grep",
         )
-
-    def file_search(self, path: str, query: str, regex: bool = False,
-                    context: int = 60, max_results: int = 20, page: int = 1) -> str:
-        """Search for text in a file."""
-        import bisect
-        
-        p = _abs(self.root_dir, path)
-        lines = _read_lines(p)
-        text = "".join(lines)
-
-        # Build line start offsets
-        offs = [0]
-        acc = 0
-        for ch in text.splitlines(keepends=True):
-            acc += len(ch)
-            offs.append(acc)
-
-        matches = []
-        if regex:
-            for m in re.finditer(query, text):
-                start, end = m.span()
-                li = bisect.bisect_right(offs, start) - 1
-                col = start - offs[li]
-                preview_start = max(0, start - context)
-                preview_end = min(len(text), end + context)
-                matches.append({
-                    "index": len(matches) + 1,
-                    "start_char": start,
-                    "end_char": end,
-                    "line": li + 1,
-                    "col": col + 1,
-                    "preview": text[preview_start:preview_end]
-                })
-        else:
-            start = 0
-            while True:
-                idx = text.find(query, start)
-                if idx == -1:
-                    break
-                end = idx + len(query)
-                li = bisect.bisect_right(offs, idx) - 1
-                col = idx - offs[li]
-                preview_start = max(0, idx - context)
-                preview_end = min(len(text), end + context)
-                matches.append({
-                    "index": len(matches) + 1,
-                    "start_char": idx,
-                    "end_char": end,
-                    "line": li + 1,
-                    "col": col + 1,
-                    "preview": text[preview_start:preview_end]
-                })
-                start = idx + 1
-
-        total_matches = len(matches)
-        total_pages = max(1, (total_matches + max_results - 1) // max_results)
-        page = max(1, min(page, total_pages))
-        begin = (page - 1) * max_results
-        end = min(total_matches, begin + max_results)
-
-        return _to_xml({
-            "matches": matches[begin:end],
-            "page": page,
-            "total_pages": total_pages,
-            "total_matches": total_matches
-        }, root_name="file_search")
 
 
 # =============================================================================
@@ -703,24 +588,6 @@ Read the file every time before calling this tool.""",
         }
     },
     {
-        "name": "fs_copy_to",
-        "description": """Copy a block of lines from one file to another.
-Use for: duplicating code blocks, templating, or moving snippets across files.""",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "src_path": {"type": "string", "description": "Source file path (workspace-relative)."},
-                "src_start_line": {"type": "integer", "description": "1-based start line in source."},
-                "src_end_line": {"type": "integer", "description": "1-based end line in source."},
-                "dst_path": {"type": "string", "description": "Destination file path (workspace-relative)."},
-                "dst_at_line": {"type": "integer", "description": "Insert before this destination line. Default: top when omitted."},
-                "mode": {"type": "string", "description": "\"insert\" or \"replace_range\". Default: insert."},
-                "dst_end_line": {"type": "integer", "description": "End line for replace_range (when mode=\"replace_range\")."},
-            },
-            "required": ["src_path", "src_start_line", "src_end_line", "dst_path"]
-        }
-    },
-    {
         "name": "fs_ls",
         "description": """List files and directories under a workspace path with basic metadata.
 Use for: discovering project structure, quick file inventory.""",
@@ -762,24 +629,6 @@ Use for: fast text search with regular expression support.""",
             "required": ["keyword", "path"]
         }
     }
-    ,
-    {
-        "name": "fs_file_search",
-        "description": """Search for a string or regex in a file and return match contexts.
-Use for: locating occurrences with surrounding preview text.""",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "path": {"type": "string", "description": "File path (workspace-relative)."},
-                "query": {"type": "string", "description": "Search string or regex pattern."},
-                "regex": {"type": "boolean", "description": "Treat query as regex. Default: false."},
-                "context": {"type": "integer", "description": "Chars around each match in preview. Default: 60."},
-                "max_results": {"type": "integer", "description": "Max results per page. Default: 20."},
-                "page": {"type": "integer", "description": "1-based page index. Default: 1."}
-            },
-            "required": ["path", "query"]
-        }
-    },
 ]
 
 # Stage 2 tools (without search/read_webpage)
