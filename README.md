@@ -1,5 +1,5 @@
 ## FS-Researcher
-This is the code repo for paper FS-Researcher
+This is the code repo for paper FS-Researcher (currently a minimal implementation, complete code coming soon).
 
 ### Project layout
 
@@ -42,5 +42,4 @@ You can also copy the entire `research_agent/` folder into another project and r
 ```bash
 python -m research_agent.main --topic "your research topic"
 ```
-
 
