@@ -1,5 +1,5 @@
 ## FS-Researcher
-This is the code repo for paper FS-Researcher (currently a minimal implementation, complete code coming soon).
+This is the code repo for paper FS-Researcher (currently a minimal implementation, performance not guaranteed, complete code coming soon).
 
 ### Project layout
 
